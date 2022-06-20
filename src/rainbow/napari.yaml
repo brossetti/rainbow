@@ -1,0 +1,48 @@
+name: rainbow
+display_name: rainbow
+contributions:
+  commands:
+    - id: rainbow.get_reader
+      python_name: rainbow._reader:napari_get_reader
+      title: Open data with rainbow
+    - id: rainbow.write_multiple
+      python_name: rainbow._writer:write_multiple
+      title: Save multi-layer data with rainbow
+    - id: rainbow.write_single_image
+      python_name: rainbow._writer:write_single_image
+      title: Save image data with rainbow
+    - id: rainbow.make_sample_data
+      python_name: rainbow._sample_data:make_sample_data
+      title: Load sample data from rainbow
+    - id: rainbow.make_qwidget
+      python_name: rainbow._widget:ExampleQWidget
+      title: Make example QWidget
+    - id: rainbow.make_magic_widget
+      python_name: rainbow._widget:example_magic_widget
+      title: Make example magic widget
+    - id: rainbow.make_func_widget
+      python_name: rainbow._widget:example_function_widget
+      title: Make example function widget
+  readers:
+    - command: rainbow.get_reader
+      accepts_directories: false
+      filename_patterns: ['*.npy']
+  writers:
+    - command: rainbow.write_multiple
+      layer_types: ['image*','labels*']
+      filename_extensions: []
+    - command: rainbow.write_single_image
+      layer_types: ['image']
+      filename_extensions: ['.npy']
+  sample_data:
+    - command: rainbow.make_sample_data
+      display_name: rainbow
+      key: unique_id.1
+  widgets:
+    - command: rainbow.make_qwidget
+      display_name: Example QWidget
+    - command: rainbow.make_magic_widget
+      display_name: Example Magic Widget
+    - command: rainbow.make_func_widget
+      autogenerate: true
+      display_name: Example Function Widget
