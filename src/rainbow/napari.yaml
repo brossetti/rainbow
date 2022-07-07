@@ -23,6 +23,12 @@ contributions:
     - id: rainbow.make_func_widget
       python_name: rainbow._widget:example_function_widget
       title: Make example function widget
+    - id: rainbow.make_inspection_widget
+      python_name: rainbow._inspect:InspectionWidget
+      title: Tools for inspecting spectral images
+    - id: rainbow.make_unmixing_widget
+      python_name: rainbow._unmixing:UnmixingWidget
+      title: Linear/Affine methods for unmixing spectral images
   readers:
     - command: rainbow.get_reader
       accepts_directories: false
@@ -39,6 +45,10 @@ contributions:
       display_name: rainbow
       key: unique_id.1
   widgets:
+    - command: rainbow.make_inspection_widget
+      display_name: Inspect
+    - command: rainbow.make_unmixing_widget
+      display_name: Unmix
     - command: rainbow.make_qwidget
       display_name: Example QWidget
     - command: rainbow.make_magic_widget
