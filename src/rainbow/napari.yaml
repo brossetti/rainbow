@@ -26,12 +26,6 @@ contributions:
     - id: rainbow.make_inspection_widget
       python_name: rainbow._inspect:InspectionWidget
       title: Tools for inspecting spectral images
-    - id: rainbow.make_inspection2_widget
-      python_name: rainbow._inspect2:InspectionWidget2
-      title: Tools for inspecting spectral images
-    - id: rainbow.make_inspection3_widget
-      python_name: rainbow._inspect3:InspectionWidget
-      title: Tools for inspecting spectral images
     - id: rainbow.make_unmixing_widget
       python_name: rainbow._unmixing:UnmixingWidget
       title: Linear/Affine methods for unmixing spectral images
@@ -53,10 +47,6 @@ contributions:
   widgets:
     - command: rainbow.make_inspection_widget
       display_name: Inspect
-    - command: rainbow.make_inspection2_widget
-      display_name: Inspect2
-    - command: rainbow.make_inspection3_widget
-      display_name: Inspect3
     - command: rainbow.make_unmixing_widget
       display_name: Unmix
     - command: rainbow.make_qwidget
