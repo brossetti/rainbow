@@ -14,6 +14,7 @@ from qtpy.QtWidgets import (
     QComboBox,
     QHBoxLayout
 )
+from napari.layers import Image
 
 
 class InspectionWidget(QWidget):
@@ -62,7 +63,7 @@ class InspectionWidget(QWidget):
 
     def _layer_selection_changed(self):
         layer = self.viewer.layers.selection.active
-        if layer and layer._type_string == 'image' and layer.ndim > self.viewer.dims.ndisplay:
+        if layer and isinstance(layer, Image) and layer.ndim > self.viewer.dims.ndisplay:
             # determine effective bit depth
             effective_bit_depth = _utils.effective_bit_depth(layer.data)
 
