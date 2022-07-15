@@ -7,25 +7,23 @@ from matplotlib.backends.backend_qtagg import FigureCanvas
 from matplotlib.backends.backend_qtagg import (
     NavigationToolbar2QT as NavigationToolbar,
 )
-# from qtpy.QtGui import QPixmap
 from qtpy.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QLabel,
-    QCheckBox,
     QComboBox,
-    QGridLayout,
-    QGroupBox,
-    QHBoxLayout,
-    QLineEdit,
-    QPushButton
+    QHBoxLayout
 )
+from napari.layers import Image
 
 
 class InspectionWidget(QWidget):
     def __init__(self, napari_viewer):
         super().__init__()
         self.viewer = napari_viewer
+
+        # add mouse move callback to viewer
+        self.viewer.mouse_move_callbacks.append(self._mouse_moved)
 
         # initialize canvas
         self._canvas = FigureCanvas(Figure(figsize=(5, 3)))
@@ -48,109 +46,83 @@ class InspectionWidget(QWidget):
         layout_main.addLayout(layout_settings)
         self.setLayout(layout_main)
 
-        # define default plot settings
-        self._settings = {
+        # define default plotting and layer properties
+        self._properties = {
+            'active': False,
             'normalization': 'max',
-            'upper_bound_normed': 1.05,
+            'upper_bound_normed': 1.05
             }
 
-        self._layer_properties = {}
-
-        # set up callbacks and plot settings for current selections
+        # set up callbacks and plot settings for active selection
         self._layer_selection_changed()
         self.viewer.layers.selection.events.changed.connect(self._layer_selection_changed)
 
+        # initialize plot
+        (self._line,) = self._axes.plot(range(self._properties['nchannels']), self._properties['spectrum'])
 
-    def _layer_selection_changed(self, event=None):
-        for layer in self.viewer.layers:
-            # ensure layer is an image of appropriate dimensions
-            if layer._type_string == 'image' and layer.ndim > self.viewer.dims.ndisplay:
-                layer_id = id(layer)
 
-                if layer in self.viewer.layers.selection:
-                    # add mouse move callback to all selected layers
-                    if self._mouse_moved not in layer.mouse_move_callbacks:
-                        layer.mouse_move_callbacks.append(self._mouse_moved)
-                    
-                        # determine effective bit depth
-                        effective_bit_depth = _utils.effective_bit_depth(layer.data)
+    def _layer_selection_changed(self):
+        layer = self.viewer.layers.selection.active
+        if layer and isinstance(layer, Image) and layer.ndim > self.viewer.dims.ndisplay:
+            # determine effective bit depth
+            effective_bit_depth = _utils.effective_bit_depth(layer.data)
 
-                        # determine number of spectral channels
-                        nchannels = layer.data.shape[0]
+            # determine number of spectral channels
+            nchannels = layer.data.shape[0]
 
-                        # set null spectrum
-                        spectrum = np.zeros(nchannels)
+            # set null spectrum
+            spectrum = np.zeros(nchannels)
 
-                        # plot null spectrum
-                        line = self._axes.plot(spectrum)
-
-                        # store layer properties for later
-                        self._layer_properties[layer_id] = {
-                            'effective_bit_depth': effective_bit_depth,
-                            'nchannels': nchannels,
-                            'spectrum': spectrum,
-                            'line': line
-                            }
-  
-                elif self._mouse_moved in layer.mouse_move_callbacks:
-                    # remove mouse move callback if layer has been unselected
-                    layer.mouse_move_callbacks.remove(self._mouse_moved)
-
-                    # remove line from plot
-                    self._axes.lines.remove(self._layer_properties[layer_id]['line'][0])
-                    
-                    # remove layer from properties dictionary
-                    del self._layer_properties[layer_id]
-            
-        # define upper bound for raw data
-        max_bit_depth = np.max([self._layer_properties[id]['effective_bit_depth'] for id in self._layer_properties])
-        max_nchannels = np.max([self._layer_properties[id]['nchannels'] for id in self._layer_properties])
-
-        self._settings.update({
-            'upper_bound_raw': 2**max_bit_depth * 1.05,
-            'nchannels': max_nchannels
-            })
+            # store properties for use in plotting
+            self._properties.update({
+                'active': True,
+                'layer': layer,
+                'upper_bound_raw': 2**effective_bit_depth * 1.05,
+                'nchannels': nchannels,
+                'spectrum': spectrum,
+                })
+        else:
+            self._properties['active'] = False
 
     
     def _normalization_changed(self, ind):
         if ind == 0:
-            self._settings['normalization'] = 'max'
-            self._axes.set_ybound(upper=self._settings['upper_bound_normed'])
+            self._properties['normalization'] = 'max'
+            self._axes.set_ybound(upper=self._properties['upper_bound_normed'])
         elif ind == 1:
-            self._settings['normalization'] = 'sum'
-            self._axes.set_ybound(upper=self._settings['upper_bound_normed'])
+            self._properties['normalization'] = 'sum'
+            self._axes.set_ybound(upper=self._properties['upper_bound_normed'])
         else:
-            self._settings['normalization'] = 'raw'
-            self._axes.set_ybound(upper=self._settings['upper_bound_raw'])
+            self._properties['normalization'] = 'raw'
+            self._axes.set_ybound(upper=self._properties['upper_bound_raw'])
         
-        for layer_id in self._layer_properties:
-            self._plot_layer_spectrum(layer_id)
+        self._plot_spectrum()
 
 
-    def _mouse_moved(self, layer, event):
-        coordinates = layer.world_to_data(self.viewer.cursor.position)
-        xy_coordinates = [int(x) for x in coordinates[-2:]]
-        if all(xy_coordinates >= layer.corner_pixels[0,-2:]) and all(xy_coordinates < layer.corner_pixels[1,-2:]):
-            layer_id = id(layer)
-            self._layer_properties[layer_id]['spectrum'] = layer.data[:,xy_coordinates[0], xy_coordinates[1]]
-            self._plot_layer_spectrum(layer_id)
+    def _mouse_moved(self, viewer, event):
+        if self._properties['active']:
+            layer = self._properties['layer']
+            coordinates = layer.world_to_data(self.viewer.cursor.position)
+            xy_coordinates = [int(x) for x in coordinates[-2:]]
+            if all(xy_coordinates >= layer.corner_pixels[0,-2:]) and all(xy_coordinates < layer.corner_pixels[1,-2:]):
+                self._properties['spectrum'] = layer.data[:,xy_coordinates[0], xy_coordinates[1]]
+                self._plot_spectrum()
 
 
-    def _plot_layer_spectrum(self, layer_id):
-        spectrum = self._layer_properties[layer_id]['spectrum']
+    def _plot_spectrum(self):
+        spectrum = self._properties['spectrum']
 
-        if self._settings['normalization'] == 'max':
+        if self._properties['normalization'] == 'max':
             spectrum = _utils.safe_normalize_max(spectrum)
             self._axes.set_ybound(upper=1.05)
-        elif self._settings['normalization'] == 'sum':
+        elif self._properties['normalization'] == 'sum':
             spectrum = _utils.safe_normalize_sum(spectrum)
             self._axes.set_ybound(upper=1.05)
             
-        channels = self._layer_properties[layer_id]['nchannels']
-        line = self._layer_properties[layer_id]['line']
-        line[0].set_data(range(channels), spectrum)
+        channels = self._properties['nchannels']
+        self._line.set_data(range(channels), spectrum)
 
-        line[0].figure.canvas.draw()
+        self._axes.figure.canvas.draw()
 
 
 if __name__ == "__main__":
