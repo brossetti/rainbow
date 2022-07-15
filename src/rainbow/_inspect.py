@@ -33,7 +33,7 @@ class InspectionWidget(QWidget):
         # create controls
         label_normalization = QLabel('normalization:')
         cbox_normalization = QComboBox()
-        cbox_normalization.addItems(['max', 'sum', 'raw'])
+        cbox_normalization.addItems(['none', 'max', 'sum'])
         cbox_normalization.activated.connect(self._normalization_changed)
 
         # create layout
@@ -49,7 +49,7 @@ class InspectionWidget(QWidget):
         # define default plotting and layer properties
         self._properties = {
             'active': False,
-            'normalization': 'max',
+            'normalization': 'none',
             'upper_bound_normed': 1.05
             }
 
