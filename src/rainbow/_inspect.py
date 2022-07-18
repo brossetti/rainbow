@@ -1,7 +1,7 @@
 import _utils
-
 import numpy as np
-
+from napari.layers import Image
+from napari.utils.theme import get_theme
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvas
 from matplotlib.backends.backend_qtagg import (
@@ -14,7 +14,12 @@ from qtpy.QtWidgets import (
     QComboBox,
     QHBoxLayout
 )
-from napari.layers import Image
+
+# TODO:
+# - Add Live button starts/stops plotting by adding/removing mouse_move_callback from viewer
+# - Add a method to store spectra
+# - Add an export method to save stored spectra as a .ref file
+# - Add drag-and-drop function that plots spectra from a .ref file
 
 
 class InspectionWidget(QWidget):
@@ -26,9 +31,9 @@ class InspectionWidget(QWidget):
         self.viewer.mouse_move_callbacks.append(self._mouse_moved)
 
         # initialize canvas
-        self._canvas = FigureCanvas(Figure(figsize=(5, 3)))
+        self._canvas = FigureCanvas(Figure(figsize=(5, 3), facecolor='none', edgecolor='none'))
         self._axes = self._canvas.figure.subplots()
-        self.toolbar = NavigationToolbar(self._canvas, self)
+        self._toolbar = NavigationToolbar(self._canvas, self)
 
         # create controls
         label_normalization = QLabel('normalization:')
@@ -42,7 +47,7 @@ class InspectionWidget(QWidget):
         layout_settings.addWidget(cbox_normalization)
         layout_main = QVBoxLayout()
         layout_main.addWidget(self._canvas)
-        layout_main.addWidget(self.toolbar)
+        layout_main.addWidget(self._toolbar)
         layout_main.addLayout(layout_settings)
         self.setLayout(layout_main)
 
@@ -50,15 +55,36 @@ class InspectionWidget(QWidget):
         self._properties = {
             'active': False,
             'normalization': 'none',
-            'upper_bound_normed': 1.05
+            'upper_bound_normed': 1.05,
+            'lower_bound': -0.05
             }
 
-        # set up callbacks and plot settings for active selection
+        # set up callbacks and plot for active selection
         self._layer_selection_changed()
         self.viewer.layers.selection.events.changed.connect(self._layer_selection_changed)
 
         # initialize plot
         (self._line,) = self._axes.plot(range(self._properties['nchannels']), self._properties['spectrum'])
+        self._axes.set_ybound(lower=self._properties['lower_bound'], upper=self._properties['upper_bound_raw'])
+        
+        # set plot style
+        self._axes.patch.set_color('none')
+        self._axes.spines['right'].set_color('none')
+        self._axes.spines['top'].set_color('none')
+        self._axes.tick_params(axis='both', bottom=False)
+
+        # set up callbacks and plot theme settings
+        self._theme_changed()
+        self.viewer.events.theme.connect(self._theme_changed)
+
+
+    def _theme_changed(self):
+        theme = get_theme(self.viewer.theme, False)
+        self._axes.tick_params(axis='both', colors=theme.text.as_hex()) # tick marks
+        self._axes.spines['left'].set_color(theme.text.as_hex())
+        self._axes.spines['bottom'].set_color(theme.text.as_hex())
+        self._line.set_color(theme.icon.as_hex())
+        self._canvas.draw()        
 
 
     def _layer_selection_changed(self):
@@ -85,16 +111,16 @@ class InspectionWidget(QWidget):
             self._properties['active'] = False
 
     
-    def _normalization_changed(self, ind):
-        if ind == 0:
+    def _normalization_changed(self, idx):
+        if idx == 1:
             self._properties['normalization'] = 'max'
-            self._axes.set_ybound(upper=self._properties['upper_bound_normed'])
-        elif ind == 1:
+            self._axes.set_ybound(lower=self._properties['lower_bound'], upper=self._properties['upper_bound_normed'])
+        elif idx == 2:
             self._properties['normalization'] = 'sum'
-            self._axes.set_ybound(upper=self._properties['upper_bound_normed'])
+            self._axes.set_ybound(lower=self._properties['lower_bound'], upper=self._properties['upper_bound_normed'])
         else:
-            self._properties['normalization'] = 'raw'
-            self._axes.set_ybound(upper=self._properties['upper_bound_raw'])
+            self._properties['normalization'] = 'none'
+            self._axes.set_ybound(lower=self._properties['lower_bound'], upper=self._properties['upper_bound_raw'])
         
         self._plot_spectrum()
 
@@ -114,15 +140,13 @@ class InspectionWidget(QWidget):
 
         if self._properties['normalization'] == 'max':
             spectrum = _utils.safe_normalize_max(spectrum)
-            self._axes.set_ybound(upper=1.05)
         elif self._properties['normalization'] == 'sum':
             spectrum = _utils.safe_normalize_sum(spectrum)
-            self._axes.set_ybound(upper=1.05)
             
         channels = self._properties['nchannels']
         self._line.set_data(range(channels), spectrum)
 
-        self._axes.figure.canvas.draw()
+        self._canvas.draw()
 
 
 if __name__ == "__main__":
