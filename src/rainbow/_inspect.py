@@ -7,12 +7,15 @@ from matplotlib.backends.backend_qtagg import FigureCanvas
 from matplotlib.backends.backend_qtagg import (
     NavigationToolbar2QT as NavigationToolbar,
 )
+from qtpy.QtGui import QIcon, QColor
 from qtpy.QtWidgets import (
     QWidget,
+    QStyle, 
+    QHBoxLayout,
     QVBoxLayout,
     QLabel,
-    QComboBox,
-    QHBoxLayout
+    QPushButton,
+    QComboBox
 )
 
 # TODO:
@@ -21,21 +24,30 @@ from qtpy.QtWidgets import (
 # - Add an export method to save stored spectra as a .ref file
 # - Add drag-and-drop function that plots spectra from a .ref file
 
+# BUG:
+# - Starting with no active layer selection will result in a 'nchannels' KeyError at line 77
+
 
 class InspectionWidget(QWidget):
     def __init__(self, napari_viewer):
         super().__init__()
         self.viewer = napari_viewer
 
-        # add mouse move callback to viewer
-        self.viewer.mouse_move_callbacks.append(self._mouse_moved)
-
         # initialize canvas
-        self._canvas = FigureCanvas(Figure(figsize=(5, 3), facecolor='none', edgecolor='none'))
+        self._canvas = FigureCanvas(
+            Figure(figsize=(5, 3), facecolor='none', edgecolor='none')
+        )
         self._axes = self._canvas.figure.subplots()
         self._toolbar = NavigationToolbar(self._canvas, self)
 
         # create controls
+        self._button_freeze = QPushButton('Freeze')
+        icon_play = self.style().standardPixmap(QStyle.SP_MediaPlay)
+        icon_pause = self.style().standardIcon(QStyle.SP_MediaPause)
+        self._button_freeze.setIcon(QIcon(icon_play))
+        self._button_freeze.clicked.connect(self._frozen_unfrozen)
+        button_hide = QPushButton('Hide')
+        # button_freeze.setCheckable(True)
         label_normalization = QLabel('normalization:')
         cbox_normalization = QComboBox()
         cbox_normalization.addItems(['none', 'max', 'sum'])
@@ -43,6 +55,8 @@ class InspectionWidget(QWidget):
 
         # create layout
         layout_settings = QHBoxLayout()
+        layout_settings.addWidget(self._button_freeze)
+        layout_settings.addWidget(button_hide)
         layout_settings.addWidget(label_normalization)
         layout_settings.addWidget(cbox_normalization)
         layout_main = QVBoxLayout()
@@ -54,6 +68,7 @@ class InspectionWidget(QWidget):
         # define default plotting and layer properties
         self._properties = {
             'active': False,
+            'frozen': False,
             'normalization': 'none',
             'upper_bound_normed': 1.05,
             'lower_bound': -0.05
@@ -78,6 +93,21 @@ class InspectionWidget(QWidget):
         self.viewer.events.theme.connect(self._theme_changed)
 
 
+    def _frozen_unfrozen(self):
+        if self._properties['frozen']:
+            # add mouse move callback to viewer
+            if self._mouse_moved not in self.viewer.mouse_move_callbacks:
+                self.viewer.mouse_move_callbacks.append(self._mouse_moved)
+            self._properties['frozen'] = False
+            self._button_freeze.setText('Freeze')
+        else:
+            # remove mouse move callback from viewer
+            if self._mouse_moved in self.viewer.mouse_move_callbacks:
+                self.viewer.mouse_move_callbacks.remove(self._mouse_moved)
+            self._properties['frozen'] = True
+            self._button_freeze.setText('Unfreeze')
+
+
     def _theme_changed(self):
         theme = get_theme(self.viewer.theme, False)
         self._axes.tick_params(axis='both', colors=theme.text.as_hex()) # tick marks
@@ -90,6 +120,13 @@ class InspectionWidget(QWidget):
     def _layer_selection_changed(self):
         layer = self.viewer.layers.selection.active
         if layer and isinstance(layer, Image) and layer.ndim > self.viewer.dims.ndisplay:
+            # add mouse move callback to viewer
+            if self._mouse_moved not in self.viewer.mouse_move_callbacks:
+                self.viewer.mouse_move_callbacks.append(self._mouse_moved)
+
+            # re-enable freeze and hide buttons
+            self._button_freeze.setDisabled(False)
+
             # determine effective bit depth
             effective_bit_depth = _utils.effective_bit_depth(layer.data)
 
@@ -108,7 +145,10 @@ class InspectionWidget(QWidget):
                 'spectrum': spectrum,
                 })
         else:
+            if self._mouse_moved in self.viewer.mouse_move_callbacks:
+                self.viewer.mouse_move_callbacks.remove(self._mouse_moved)
             self._properties['active'] = False
+            self._button_freeze.setDisabled(True)
 
     
     def _normalization_changed(self, idx):
@@ -126,13 +166,12 @@ class InspectionWidget(QWidget):
 
 
     def _mouse_moved(self, viewer, event):
-        if self._properties['active']:
-            layer = self._properties['layer']
-            coordinates = layer.world_to_data(self.viewer.cursor.position)
-            xy_coordinates = [int(x) for x in coordinates[-2:]]
-            if all(xy_coordinates >= layer.corner_pixels[0,-2:]) and all(xy_coordinates < layer.corner_pixels[1,-2:]):
-                self._properties['spectrum'] = layer.data[:,xy_coordinates[0], xy_coordinates[1]]
-                self._plot_spectrum()
+        layer = self._properties['layer']
+        coordinates = layer.world_to_data(self.viewer.cursor.position)
+        xy_coordinates = [int(x) for x in coordinates[-2:]]
+        if all(xy_coordinates >= layer.corner_pixels[0,-2:]) and all(xy_coordinates < layer.corner_pixels[1,-2:]):
+            self._properties['spectrum'] = layer.data[:,xy_coordinates[0], xy_coordinates[1]]
+            self._plot_spectrum()
 
 
     def _plot_spectrum(self):
