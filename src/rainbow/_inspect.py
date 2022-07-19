@@ -19,14 +19,9 @@ from qtpy.QtWidgets import (
 )
 
 # TODO:
-# - Add Live button starts/stops plotting by adding/removing mouse_move_callback from viewer
 # - Add a method to store spectra
 # - Add an export method to save stored spectra as a .ref file
 # - Add drag-and-drop function that plots spectra from a .ref file
-
-# BUG:
-# - Starting with no active layer selection will result in a 'nchannels' KeyError at line 77
-
 
 class InspectionWidget(QWidget):
     def __init__(self, napari_viewer):
@@ -41,13 +36,12 @@ class InspectionWidget(QWidget):
         self._toolbar = NavigationToolbar(self._canvas, self)
 
         # create controls
-        self._button_freeze = QPushButton('Freeze')
-        icon_play = self.style().standardPixmap(QStyle.SP_MediaPlay)
-        icon_pause = self.style().standardIcon(QStyle.SP_MediaPause)
-        self._button_freeze.setIcon(QIcon(icon_play))
-        self._button_freeze.clicked.connect(self._frozen_unfrozen)
-        button_hide = QPushButton('Hide')
-        # button_freeze.setCheckable(True)
+        self._button_pause = QPushButton('Pause')
+        # icon_play = self.style().standardPixmap(QStyle.SP_MediaPlay)
+        # icon_pause = self.style().standardIcon(QStyle.SP_MediaPause)
+        # self._button_pause.setIcon(QIcon(icon_play))
+        self._button_pause.clicked.connect(self._pause_toggled)
+        self._button_hide = QPushButton('Hide')
         label_normalization = QLabel('normalization:')
         cbox_normalization = QComboBox()
         cbox_normalization.addItems(['none', 'max', 'sum'])
@@ -55,10 +49,11 @@ class InspectionWidget(QWidget):
 
         # create layout
         layout_settings = QHBoxLayout()
-        layout_settings.addWidget(self._button_freeze)
-        layout_settings.addWidget(button_hide)
+        layout_settings.addWidget(self._button_pause)
+        layout_settings.addWidget(self._button_hide)
         layout_settings.addWidget(label_normalization)
         layout_settings.addWidget(cbox_normalization)
+        layout_settings.addStretch(0)
         layout_main = QVBoxLayout()
         layout_main.addWidget(self._canvas)
         layout_main.addWidget(self._toolbar)
@@ -67,21 +62,38 @@ class InspectionWidget(QWidget):
 
         # define default plotting and layer properties
         self._properties = {
-            'active': False,
-            'frozen': False,
-            'normalization': 'none',
-            'upper_bound_normed': 1.05,
-            'lower_bound': -0.05
-            }
+            'active_selection': False,
+            'paused': False,
+            'hidden': False,
+            'normalization': 0,
+            'ymin': -0.05,
+            'ymax': 1.05,
+            'xmin': -1.05,
+            'xmax': 43.05,
+            'axis_limits_stale': False,
+            'effective_bit_depth': 0,
+            'nchannels': 42,
+            'live_spectrum': np.full(42, np.NaN)
+        }
 
         # set up callbacks and plot for active selection
         self._layer_selection_changed()
         self.viewer.layers.selection.events.changed.connect(self._layer_selection_changed)
 
         # initialize plot
-        (self._line,) = self._axes.plot(range(self._properties['nchannels']), self._properties['spectrum'])
-        self._axes.set_ybound(lower=self._properties['lower_bound'], upper=self._properties['upper_bound_raw'])
-        
+        (self._line,) = self._axes.plot(
+            range(self._properties['nchannels']), 
+            self._properties['live_spectrum']
+        )
+        self._axes.set_ybound(
+            lower=self._properties['ymin'],
+            upper=self._properties['ymax']
+        )
+        self._axes.set_xbound(
+            lower=self._properties['xmin'],
+            upper=self._properties['xmax']
+        )
+
         # set plot style
         self._axes.patch.set_color('none')
         self._axes.spines['right'].set_color('none')
@@ -93,44 +105,32 @@ class InspectionWidget(QWidget):
         self.viewer.events.theme.connect(self._theme_changed)
 
 
-    def _frozen_unfrozen(self):
-        if self._properties['frozen']:
-            # add mouse move callback to viewer
-            if self._mouse_moved not in self.viewer.mouse_move_callbacks:
-                self.viewer.mouse_move_callbacks.append(self._mouse_moved)
-            self._properties['frozen'] = False
-            self._button_freeze.setText('Freeze')
-        else:
-            # remove mouse move callback from viewer
-            if self._mouse_moved in self.viewer.mouse_move_callbacks:
-                self.viewer.mouse_move_callbacks.remove(self._mouse_moved)
-            self._properties['frozen'] = True
-            self._button_freeze.setText('Unfreeze')
+    def _set_mouse_move_callback(self):
+        """Adds the mouse move callback only if settings allow"""
+        active_selection = self._properties['active_selection']
+        paused = self._properties['paused']
+        hidden = self._properties['hidden']
+        already_set = self._mouse_moved in self.viewer.mouse_move_callbacks
+
+        if active_selection and not paused and not hidden and not already_set:
+            self.viewer.mouse_move_callbacks.append(self._mouse_moved)
 
 
-    def _theme_changed(self):
-        theme = get_theme(self.viewer.theme, False)
-        self._axes.tick_params(axis='both', colors=theme.text.as_hex()) # tick marks
-        self._axes.spines['left'].set_color(theme.text.as_hex())
-        self._axes.spines['bottom'].set_color(theme.text.as_hex())
-        self._line.set_color(theme.icon.as_hex())
-        self._canvas.draw()        
+    def _unset_mouse_move_callback(self):
+        """Removes the mouse move callback if it exists"""
+        if self._mouse_moved in self.viewer.mouse_move_callbacks:
+            self.viewer.mouse_move_callbacks.remove(self._mouse_moved)
 
 
     def _layer_selection_changed(self):
+        """Modifies state for new active layer"""
         layer = self.viewer.layers.selection.active
-        if layer and isinstance(layer, Image) and layer.ndim > self.viewer.dims.ndisplay:
-            # add mouse move callback to viewer
-            if self._mouse_moved not in self.viewer.mouse_move_callbacks:
-                self.viewer.mouse_move_callbacks.append(self._mouse_moved)
-
-            # re-enable freeze and hide buttons
-            self._button_freeze.setDisabled(False)
-
+        if layer and isinstance(layer, Image) and (layer.ndim > self.viewer.dims.ndisplay):
             # determine effective bit depth
             effective_bit_depth = _utils.effective_bit_depth(layer.data)
 
             # determine number of spectral channels
+            # TODO: dynamically determine correct spectral dimension
             nchannels = layer.data.shape[0]
 
             # set null spectrum
@@ -138,52 +138,113 @@ class InspectionWidget(QWidget):
 
             # store properties for use in plotting
             self._properties.update({
-                'active': True,
+                'active_selection': True,
                 'layer': layer,
-                'upper_bound_raw': 2**effective_bit_depth * 1.05,
+                'xmin': -0.05 - (nchannels * 0.05),
+                'xmax': nchannels * 1.05,
+                'axis_limits_stale': True,
+                'effective_bit_depth': effective_bit_depth,   
                 'nchannels': nchannels,
-                'spectrum': spectrum,
-                })
-        else:
-            if self._mouse_moved in self.viewer.mouse_move_callbacks:
-                self.viewer.mouse_move_callbacks.remove(self._mouse_moved)
-            self._properties['active'] = False
-            self._button_freeze.setDisabled(True)
+                'live_spectrum': spectrum
+            })
 
-    
-    def _normalization_changed(self, idx):
-        if idx == 1:
-            self._properties['normalization'] = 'max'
-            self._axes.set_ybound(lower=self._properties['lower_bound'], upper=self._properties['upper_bound_normed'])
-        elif idx == 2:
-            self._properties['normalization'] = 'sum'
-            self._axes.set_ybound(lower=self._properties['lower_bound'], upper=self._properties['upper_bound_normed'])
+            # correct y-axis limits
+            self._calculate_ylimits()
+
+            # re-enable pause button
+            self._button_pause.setDisabled(False)
+
+            # conditianally add mouse move callback to viewer
+            self._set_mouse_move_callback()
         else:
-            self._properties['normalization'] = 'none'
-            self._axes.set_ybound(lower=self._properties['lower_bound'], upper=self._properties['upper_bound_raw'])
-        
+            # turn everything off since there is no active selection
+            self._properties['active_selection'] = False
+            self._button_pause.setDisabled(True)
+            self._unset_mouse_move_callback()
+
+
+    def _pause_toggled(self):
+        """Pause/Unpause live spectrum plotting"""
+        if self._properties['paused']:
+            # unpause
+            self._properties['paused'] = False
+            self._button_pause.setText('Pause')
+            self._set_mouse_move_callback()
+        else:
+            # pause
+            self._properties['paused'] = True
+            self._button_pause.setText('Live')
+            self._unset_mouse_move_callback()
+
+
+    def _theme_changed(self):
+        """Updates plot for new color theme"""
+        theme = get_theme(self.viewer.theme, False)
+
+        # update matplotlib figure
+        self._axes.tick_params(axis='both', colors=theme.text.as_hex())
+        self._axes.spines['left'].set_color(theme.text.as_hex())
+        self._axes.spines['bottom'].set_color(theme.text.as_hex())
+        self._line.set_color(theme.icon.as_hex())
+        self._canvas.draw()        
+
+    def _calculate_ylimits(self):
+        norm = self._properties['normalization']
+        if norm == 1 or norm == 2:
+            # max or sum
+            self._properties.update({
+                'ymin': -0.05,
+                'ymax': 1.05,
+                'axis_limits_stale': True
+            })
+        else:
+            # none
+            effective_bit_depth = self._properties['effective_bit_depth']
+            self._properties.update({
+                'ymin': -0.05 - (2**effective_bit_depth * 0.05),
+                'ymax': 2**effective_bit_depth * 1.05,
+                'axis_limits_stale': True
+            })
+
+
+    def _normalization_changed(self, idx):
+        self._properties['normalization'] = idx
+        self._calculate_ylimits()
         self._plot_spectrum()
 
 
     def _mouse_moved(self, viewer, event):
+        """Plots spectrum if coordinates are inbounds for active layer"""
         layer = self._properties['layer']
         coordinates = layer.world_to_data(self.viewer.cursor.position)
         xy_coordinates = [int(x) for x in coordinates[-2:]]
         if all(xy_coordinates >= layer.corner_pixels[0,-2:]) and all(xy_coordinates < layer.corner_pixels[1,-2:]):
-            self._properties['spectrum'] = layer.data[:,xy_coordinates[0], xy_coordinates[1]]
+            self._properties['live_spectrum'] = layer.data[:,xy_coordinates[0], xy_coordinates[1]]
             self._plot_spectrum()
 
 
     def _plot_spectrum(self):
-        spectrum = self._properties['spectrum']
+        """Plots the current spectrum with/without normalization"""
+        spectrum = self._properties['live_spectrum']
 
-        if self._properties['normalization'] == 'max':
+        if self._properties['normalization'] == 1:
             spectrum = _utils.safe_normalize_max(spectrum)
-        elif self._properties['normalization'] == 'sum':
+        elif self._properties['normalization'] == 2:
             spectrum = _utils.safe_normalize_sum(spectrum)
             
         channels = self._properties['nchannels']
         self._line.set_data(range(channels), spectrum)
+
+        if self._properties['axis_limits_stale']:
+            self._axes.set_xbound(
+                lower=self._properties['xmin'], 
+                upper=self._properties['xmax']
+            )
+            self._axes.set_ybound(
+                lower=self._properties['ymin'], 
+                upper=self._properties['ymax']
+            )
+            self._properties['axis_limits_stale'] = False
 
         self._canvas.draw()
 
