@@ -36,12 +36,18 @@ class InspectionWidget(QWidget):
         self._toolbar = NavigationToolbar(self._canvas, self)
 
         # create controls
-        self._button_pause = QPushButton('Pause')
+        label_inspector = QLabel('inspector:')
+        self._button_live = QPushButton('Live')
+        self._button_live.setCheckable(True)
+        self._button_live.setChecked(True)
         # icon_play = self.style().standardPixmap(QStyle.SP_MediaPlay)
         # icon_pause = self.style().standardIcon(QStyle.SP_MediaPause)
-        # self._button_pause.setIcon(QIcon(icon_play))
-        self._button_pause.clicked.connect(self._pause_toggled)
+        # self._button_live.setIcon(QIcon(icon_play))
+        self._button_live.clicked.connect(self._live_toggled)
+        self.viewer.bind_key('l', self._live_toggled)
         self._button_hide = QPushButton('Hide')
+        self._button_hide.setCheckable(True)
+        self._button_hide.clicked.connect(self._hide_toggled)
         label_normalization = QLabel('normalization:')
         cbox_normalization = QComboBox()
         cbox_normalization.addItems(['none', 'max', 'sum'])
@@ -49,8 +55,10 @@ class InspectionWidget(QWidget):
 
         # create layout
         layout_settings = QHBoxLayout()
-        layout_settings.addWidget(self._button_pause)
+        layout_settings.addWidget(label_inspector)
+        layout_settings.addWidget(self._button_live)
         layout_settings.addWidget(self._button_hide)
+        layout_settings.addStretch(1)
         layout_settings.addWidget(label_normalization)
         layout_settings.addWidget(cbox_normalization)
         layout_settings.addStretch(0)
@@ -63,7 +71,7 @@ class InspectionWidget(QWidget):
         # define default plotting and layer properties
         self._properties = {
             'active_selection': False,
-            'paused': False,
+            'live': True,
             'hidden': False,
             'normalization': 0,
             'ymin': -0.05,
@@ -108,11 +116,11 @@ class InspectionWidget(QWidget):
     def _set_mouse_move_callback(self):
         """Adds the mouse move callback only if settings allow"""
         active_selection = self._properties['active_selection']
-        paused = self._properties['paused']
+        live = self._properties['live']
         hidden = self._properties['hidden']
         already_set = self._mouse_moved in self.viewer.mouse_move_callbacks
 
-        if active_selection and not paused and not hidden and not already_set:
+        if active_selection and live and not hidden and not already_set:
             self.viewer.mouse_move_callbacks.append(self._mouse_moved)
 
 
@@ -151,30 +159,47 @@ class InspectionWidget(QWidget):
             # correct y-axis limits
             self._calculate_ylimits()
 
-            # re-enable pause button
-            self._button_pause.setDisabled(False)
+            # re-enable live button
+            self._button_live.setDisabled(False)
 
             # conditianally add mouse move callback to viewer
             self._set_mouse_move_callback()
         else:
             # turn everything off since there is no active selection
             self._properties['active_selection'] = False
-            self._button_pause.setDisabled(True)
+            self._button_live.setDisabled(True)
             self._unset_mouse_move_callback()
 
 
-    def _pause_toggled(self):
-        """Pause/Unpause live spectrum plotting"""
-        if self._properties['paused']:
+    def _live_toggled(self, viewer):
+        """Live/paused live spectrum plotting"""
+        if self._properties['live']:
+            # pause
+            self._button_live.setChecked(False)
+            self._properties['live'] = False
+            self._unset_mouse_move_callback()
+        else:
             # unpause
-            self._properties['paused'] = False
-            self._button_pause.setText('Pause')
+            self._button_live.setChecked(True)
+            self._properties['live'] = True
+            self._set_mouse_move_callback()
+
+
+    def _hide_toggled(self):
+        """Hide/Unhide live spectrum"""
+        if self._properties['hidden']:
+            # unhide
+            self._button_live.setDisabled(False)
+            self._line.set_linestyle('solid')
+            self._properties['hidden'] = False
             self._set_mouse_move_callback()
         else:
-            # pause
-            self._properties['paused'] = True
-            self._button_pause.setText('Live')
+            # hide
+            self._button_live.setDisabled(True)
+            self._line.set_linestyle('None')
+            self._properties['hidden'] = True
             self._unset_mouse_move_callback()
+        self._canvas.draw()
 
 
     def _theme_changed(self):
