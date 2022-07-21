@@ -11,6 +11,8 @@ from qtpy.QtGui import QIcon, QColor
 from qtpy.QtWidgets import (
     QWidget,
     QStyle, 
+    QGroupBox,
+    QGridLayout,
     QHBoxLayout,
     QVBoxLayout,
     QLabel,
@@ -35,9 +37,9 @@ class InspectionWidget(QWidget):
         self._axes = self._canvas.figure.subplots()
         self._toolbar = NavigationToolbar(self._canvas, self)
 
-        # create controls
+        # settings - controls
         label_inspector = QLabel('inspector:')
-        self._button_live = QPushButton('Live')
+        self._button_live = QPushButton('live')
         self._button_live.setCheckable(True)
         self._button_live.setChecked(True)
         # icon_play = self.style().standardPixmap(QStyle.SP_MediaPlay)
@@ -45,7 +47,7 @@ class InspectionWidget(QWidget):
         # self._button_live.setIcon(QIcon(icon_play))
         self._button_live.clicked.connect(self._live_toggled)
         self.viewer.bind_key('l', self._live_toggled)
-        self._button_hide = QPushButton('Hide')
+        self._button_hide = QPushButton('hide')
         self._button_hide.setCheckable(True)
         self._button_hide.clicked.connect(self._hide_toggled)
         label_normalization = QLabel('normalization:')
@@ -53,7 +55,7 @@ class InspectionWidget(QWidget):
         cbox_normalization.addItems(['none', 'max', 'sum'])
         cbox_normalization.activated.connect(self._normalization_changed)
 
-        # create layout
+        # settings - layout
         layout_settings = QHBoxLayout()
         layout_settings.addWidget(label_inspector)
         layout_settings.addWidget(self._button_live)
@@ -62,10 +64,25 @@ class InspectionWidget(QWidget):
         layout_settings.addWidget(label_normalization)
         layout_settings.addWidget(cbox_normalization)
         layout_settings.addStretch(0)
+
+        gbox_settings = QGroupBox('settings')
+        gbox_settings.setLayout(layout_settings)
+        
+        # metadata - controls
+
+        # metadata - layout
+        layout_metadata = QGridLayout()
+
+        gbox_metadata = QGroupBox('metadata')
+        gbox_metadata.setLayout(layout_metadata)
+
+
+        # main layout
         layout_main = QVBoxLayout()
         layout_main.addWidget(self._canvas)
         layout_main.addWidget(self._toolbar)
-        layout_main.addLayout(layout_settings)
+        layout_main.addWidget(gbox_settings)
+        layout_main.addWidget(gbox_metadata)
         self.setLayout(layout_main)
 
         # define default plotting and layer properties
@@ -142,7 +159,7 @@ class InspectionWidget(QWidget):
             nchannels = layer.data.shape[0]
 
             # set null spectrum
-            spectrum = np.zeros(nchannels)
+            spectrum = np.full(nchannels, np.NaN)
 
             # store properties for use in plotting
             self._properties.update({
@@ -277,8 +294,10 @@ class InspectionWidget(QWidget):
 if __name__ == "__main__":
     import napari
     viewer = napari.Viewer()
-    im1 = napari.utils.io.magic_imread('/Users/brossetti/Desktop/Lepto_10fluors_s001.tif')
-    im2 = im1.copy() - 1
+    # im1 = napari.utils.io.magic_imread('/Users/brossetti/Desktop/Lepto_10fluors_s001.tif')
+    # im2 = im1.copy() - 1
+    im1 = np.random.random((3, 256, 128)) # Z,Y,X order
+    im2 = np.random.random((3, 256, 128))
     viewer.add_image(im1)
     viewer.add_image(im2)
     napari.run()
