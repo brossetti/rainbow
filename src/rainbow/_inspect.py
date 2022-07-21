@@ -7,12 +7,8 @@ from matplotlib.backends.backend_qtagg import FigureCanvas
 from matplotlib.backends.backend_qtagg import (
     NavigationToolbar2QT as NavigationToolbar,
 )
-from qtpy.QtGui import QIcon, QColor
 from qtpy.QtWidgets import (
     QWidget,
-    QStyle, 
-    QGroupBox,
-    QGridLayout,
     QHBoxLayout,
     QVBoxLayout,
     QLabel,
@@ -24,6 +20,7 @@ from qtpy.QtWidgets import (
 # - Add a method to store spectra
 # - Add an export method to save stored spectra as a .ref file
 # - Add drag-and-drop function that plots spectra from a .ref file
+# - Fix xmin/xmax to work with wavelengths or indices
 
 class InspectionWidget(QWidget):
     def __init__(self, napari_viewer):
@@ -37,14 +34,11 @@ class InspectionWidget(QWidget):
         self._axes = self._canvas.figure.subplots()
         self._toolbar = NavigationToolbar(self._canvas, self)
 
-        # settings - controls
+        # controls
         label_inspector = QLabel('inspector:')
         self._button_live = QPushButton('live')
         self._button_live.setCheckable(True)
         self._button_live.setChecked(True)
-        # icon_play = self.style().standardPixmap(QStyle.SP_MediaPlay)
-        # icon_pause = self.style().standardIcon(QStyle.SP_MediaPause)
-        # self._button_live.setIcon(QIcon(icon_play))
         self._button_live.clicked.connect(self._live_toggled)
         self.viewer.bind_key('l', self._live_toggled)
         self._button_hide = QPushButton('hide')
@@ -55,7 +49,7 @@ class InspectionWidget(QWidget):
         cbox_normalization.addItems(['none', 'max', 'sum'])
         cbox_normalization.activated.connect(self._normalization_changed)
 
-        # settings - layout
+        # layout
         layout_settings = QHBoxLayout()
         layout_settings.addWidget(label_inspector)
         layout_settings.addWidget(self._button_live)
@@ -65,24 +59,10 @@ class InspectionWidget(QWidget):
         layout_settings.addWidget(cbox_normalization)
         layout_settings.addStretch(0)
 
-        gbox_settings = QGroupBox('settings')
-        gbox_settings.setLayout(layout_settings)
-        
-        # metadata - controls
-
-        # metadata - layout
-        layout_metadata = QGridLayout()
-
-        gbox_metadata = QGroupBox('metadata')
-        gbox_metadata.setLayout(layout_metadata)
-
-
-        # main layout
         layout_main = QVBoxLayout()
         layout_main.addWidget(self._canvas)
         layout_main.addWidget(self._toolbar)
-        layout_main.addWidget(gbox_settings)
-        layout_main.addWidget(gbox_metadata)
+        layout_main.addLayout(layout_settings)
         self.setLayout(layout_main)
 
         # define default plotting and layer properties
@@ -229,6 +209,7 @@ class InspectionWidget(QWidget):
         self._axes.spines['bottom'].set_color(theme.text.as_hex())
         self._line.set_color(theme.icon.as_hex())
         self._canvas.draw()        
+
 
     def _calculate_ylimits(self):
         norm = self._properties['normalization']
