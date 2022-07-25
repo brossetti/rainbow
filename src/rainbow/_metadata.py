@@ -21,15 +21,7 @@ class MetadataWidget(QWidget):
         super().__init__()
         self.viewer = napari_viewer
 
-        # metadata
-        self._layer_metadata = {
-            'x': None,
-            'y': None,
-            'z': None,
-            'c': None
-        }
-
-        # spatial dimensions
+        # layout
         self._layout_dimensions = QGridLayout()
         layout_main = QVBoxLayout()
         layout_main.addLayout(self._layout_dimensions)
@@ -37,65 +29,94 @@ class MetadataWidget(QWidget):
         self.setLayout(layout_main)
 
         # determine metadata for current selection
-        self._layer_changed()
-        self.viewer.layers.selection.events.changed.connect(self._layer_changed)
-        self.viewer.dims.events.order.connect(self._layer_changed)
-        self.viewer.dims.events.ndisplay.connect(self._layer_changed)
+        self._layer_selection_changed()
+        self.viewer.layers.selection.events.changed.connect(self._layer_selection_changed)
+        
+        # update metadata when view is changed
+        self.viewer.dims.events.order.connect(self._view_changed)
+        self.viewer.dims.events.ndisplay.connect(self._view_changed)
+
+
+    def _layer_selection_changed(self):
+        """Initializes or gets metadata for new layer selection"""
+        layer = self.viewer.layers.selection.active
+        self._reset_display()
+        if layer and isinstance(layer, Image):
+            if 'rainbow' not in layer.metadata:
+                layer.metadata['rainbow'] = {} 
+            
+            if 'axes' not in layer.metadata['rainbow']:
+                layer.metadata['rainbow']['axes'] = {'x': {}, 'y': {}, 'z': {}, 'c': {}} 
+                self._infer_axis_indices(layer)
+
+            self._display_dimensions(layer)
+
+
+    def _view_changed(self):
+        """Update axis labels for all layers with metadata"""
+        for layer in self.viewer.layers:
+            if 'rainbow' in layer.metadata and 'axes' in layer.metadata['rainbow']:
+                self._infer_axis_indices(layer)
+
+                # update display if this is the active layer
+                if layer == self.viewer.layers.selection.active:
+                    self._display_dimensions(layer)
+
+
+    def _infer_axis_indices(self, layer):
+        axes = layer.metadata['rainbow']['axes']
+        offset = self.viewer.dims.ndim - layer.ndim
+
+        # identify X and Y (assume last two)
+        axes['x']['index'] = self.viewer.dims.displayed[-1] - offset
+        axes['y']['index'] = self.viewer.dims.displayed[-2] - offset
+
+        # identify Z if it exists (assume third to last if in 3D mode)
+        if self.viewer.dims.ndisplay == 3 and layer.ndim > 2:
+            axes['z']['index'] = self.viewer.dims.displayed[-3] - offset
+        else:
+            axes['z']['index'] = -1
+
+        # identify C (assume first non-displayed dimension)
+        if 'index' not in axes['c'] or axes['c']['index'] is None or (axes['c']['index'] + offset) not in self.viewer.dims.not_displayed:
+            if self.viewer.dims.ndisplay < layer.ndim:
+                axes['c']['index'] = max(self.viewer.dims.not_displayed) - offset
+            else:
+                axes['c']['index'] = -1
+
+        # determine extent for each axis
+        for a in axes:
+            if axes[a]['index'] < 0:
+                axes[a]['index'] = None
+                axes[a]['extent'] = 0
+            else:
+                axes[a]['extent'] = layer.data.shape[axes[a]['index']]
 
 
     def _display_dimensions(self, layer):
-        self._clear_metadata_display()
-        s = layer.data.shape
+        self._reset_display()
+        axes = layer.metadata['rainbow']['axes']
         i = 0
-        for d in ['x', 'y', 'z']:
-            if self._layer_metadata[d] is not None:
-                label = QLabel(d.upper() + ': ' + str(s[self._layer_metadata[d]]))
+        for a in ['x', 'y', 'z']:
+            if axes[a]['index'] is not None:
+                label = QLabel(a.upper() + ': ' + str(axes[a]['extent']))
                 self._layout_dimensions.addWidget(label, 0, i)
                 i += 1
         
-        if len(self.viewer.dims.not_displayed) == 1:
+        if self.viewer.dims.ndisplay + 1 == layer.data.ndim:
             # assume this one non-displayed dimension represent spectral channels
-            label = QLabel('C: ' + str(s[self._layer_metadata['c']]))
+            label = QLabel('C: ' + str(str(axes['c']['extent'])))
             self._layout_dimensions.addWidget(label, 0, i)
         else:
             # make radio buttons if more than one non-displayed dimension
             pass
 
 
-
-    def _identify_dimensions(self, layer):
-        # identify X and Y
-        self._layer_metadata['x'] = self.viewer.dims.displayed[-1]
-        self._layer_metadata['y'] = self.viewer.dims.displayed[-2]
-
-        # identify Z if it exists
-        if len(self.viewer.dims.displayed) == 3:
-            self._layer_metadata['z'] = self.viewer.dims.displayed[-3]
-        else:
-            self._layer_metadata['z'] = None
-
-        # identify C
-        if layer.ndim > self.viewer.dims.ndisplay:
-            if self._layer_metadata['c'] not in self.viewer.dims.not_displayed:
-                # assume first of non-displayed dimensions is channel
-                self._layer_metadata['c'] = self.viewer.dims.not_displayed[0]
-
-
-    def _clear_metadata_display(self):
+    def _reset_display(self):
         while self._layout_dimensions.count():
             child = self._layout_dimensions.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
-
-
-    def _layer_changed(self):
-        """Modifies state for new active layer"""
-        layer = self.viewer.layers.selection.active
-        if layer and isinstance(layer, Image):
-            self._identify_dimensions(layer)
-            self._display_dimensions(layer)
-        else:
-            self._clear_metadata_display()
 
 
 if __name__ == "__main__":
