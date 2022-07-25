@@ -65,30 +65,28 @@ class MetadataWidget(QWidget):
 
     def _infer_axis_indices(self, layer):
         axes = layer.metadata['rainbow']['axes']
-        offset = self.viewer.dims.ndim - layer.ndim
 
         # identify X and Y (assume last two)
-        axes['x']['index'] = self.viewer.dims.displayed[-1] - offset
-        axes['y']['index'] = self.viewer.dims.displayed[-2] - offset
+        axes['x']['index'] = layer._dims_displayed[-1]
+        axes['y']['index'] = layer._dims_displayed[-2]
 
         # identify Z if it exists (assume third to last if in 3D mode)
         if self.viewer.dims.ndisplay == 3 and layer.ndim > 2:
-            axes['z']['index'] = self.viewer.dims.displayed[-3] - offset
+            axes['z']['index'] = layer._dims_displayed[-3]
         else:
-            axes['z']['index'] = -1
+            axes['z']['index'] = None
 
         # identify C (assume first non-displayed dimension)
-        if 'index' not in axes['c'] or axes['c']['index'] is None or (axes['c']['index'] + offset) not in self.viewer.dims.not_displayed:
+        if 'index' not in axes['c'] or axes['c']['index'] is None or axes['c']['index'] not in layer._dims_not_displayed:
             if self.viewer.dims.ndisplay < layer.ndim:
-                axes['c']['index'] = max(self.viewer.dims.not_displayed) - offset
+                axes['c']['index'] = layer._dims_not_displayed[-1]
             else:
-                axes['c']['index'] = -1
+                axes['c']['index'] = None
 
         # determine extent for each axis
         for a in axes:
-            if axes[a]['index'] < 0:
-                axes[a]['index'] = None
-                axes[a]['extent'] = 0
+            if axes[a]['index'] is None:
+                axes[a]['extent'] = 1
             else:
                 axes[a]['extent'] = layer.data.shape[axes[a]['index']]
 
