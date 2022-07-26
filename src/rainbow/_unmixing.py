@@ -130,11 +130,11 @@ class UnmixingWidget(QWidget):
         N = len(self._endmembers)
 
         # construct A and B
-        A = np.hstack([e.data for e in self._endmembers])
+        A = np.vstack([e.data for e in self._endmembers]).T
         B = layer.data
 
         # apply NNLS along spectral dimension
-        nnlsA = lambda b: nnls(A, b)
+        nnlsA = lambda b: nnls(A, b)[0]
         X = np.apply_along_axis(nnlsA, cidx, B)
 
         # display X in new viewer
