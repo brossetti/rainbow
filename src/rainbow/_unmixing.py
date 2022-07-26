@@ -3,6 +3,7 @@ import spectrum
 import csv
 import numpy as np
 from scipy.optimize import nnls
+from napari import view_image
 from napari.layers import Image
 from napari.utils.theme import get_theme
 from matplotlib.figure import Figure
@@ -53,6 +54,7 @@ class UnmixingWidget(QWidget):
             'xmin': -1.05,
             'xmax': 43.05
         }
+        self._endmembers = []
 
         # set up callbacks and plot for active selection
         self._set_unmix_button()
@@ -122,7 +124,25 @@ class UnmixingWidget(QWidget):
 
 
     def _unmix(self):
-        pass
+        layer = self.viewer.layers.selection.active
+        cidx = layer.metadata['rainbow']['axes']['c']['index']
+        M = layer.metadata['rainbow']['axes']['c']['extent']
+        N = len(self._endmembers)
+
+        # construct A and B
+        A = np.hstack([e.data for e in self._endmembers])
+        B = layer.data
+
+        # apply NNLS along spectral dimension
+        nnlsA = lambda b: nnls(A, b)
+        X = np.apply_along_axis(nnlsA, cidx, B)
+
+        # display X in new viewer
+        view_image(X, channel_axis=cidx)
+
+
+
+
 
     def _theme_changed(self):
         """Updates plot for new color theme"""
@@ -139,10 +159,10 @@ class UnmixingWidget(QWidget):
 if __name__ == "__main__":
     import napari
     viewer = napari.Viewer()
-    # im1 = napari.utils.io.magic_imread('/Users/brossetti/Desktop/Lepto_10fluors_s001.tif')
+    im1 = napari.utils.io.magic_imread('/Users/brossetti/Desktop/Lepto_10fluors_s001.tif')
     # im2 = im1.copy() - 1
-    im1 = np.random.random((3, 256, 128)) # Z,Y,X order
-    im2 = np.random.random((3, 256, 128))
+    # im1 = np.random.random((3, 256, 128)) # Z,Y,X order
+    # im2 = np.random.random((3, 256, 128))
     viewer.add_image(im1)
-    viewer.add_image(im2)
+    # viewer.add_image(im2)
     napari.run()
