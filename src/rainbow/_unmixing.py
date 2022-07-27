@@ -138,7 +138,7 @@ class UnmixingWidget(QWidget):
         X = np.apply_along_axis(nnlsA, cidx, B)
 
         # display X in new viewer
-        view_image(X, channel_axis=cidx)
+        view_image(X, channel_axis=cidx, name=[e.name for e in self._endmembers])
 
 
 
