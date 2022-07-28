@@ -141,9 +141,6 @@ class UnmixingWidget(QWidget):
         view_image(X, channel_axis=cidx, name=[e.name for e in self._endmembers])
 
 
-
-
-
     def _theme_changed(self):
         """Updates plot for new color theme"""
         theme = get_theme(self.viewer.theme, False)
