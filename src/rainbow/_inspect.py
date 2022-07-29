@@ -27,43 +27,8 @@ class InspectionWidget(QWidget):
         super().__init__()
         self.viewer = napari_viewer
 
-        # initialize canvas
-        self._canvas = FigureCanvas(
-            Figure(figsize=(5, 3), facecolor='none', edgecolor='none')
-        )
-        self._axes = self._canvas.figure.subplots()
-        self._toolbar = NavigationToolbar(self._canvas, self)
-
-        # controls
-        label_inspector = QLabel('inspector:')
-        self._button_live = QPushButton('live')
-        self._button_live.setCheckable(True)
-        self._button_live.setChecked(True)
-        self._button_live.clicked.connect(self._live_toggled)
-        self.viewer.bind_key('l', self._live_toggled)
-        self._button_hide = QPushButton('hide')
-        self._button_hide.setCheckable(True)
-        self._button_hide.clicked.connect(self._hide_toggled)
-        label_normalization = QLabel('normalization:')
-        cbox_normalization = QComboBox()
-        cbox_normalization.addItems(['none', 'max', 'sum'])
-        cbox_normalization.activated.connect(self._normalization_changed)
-
-        # layout
-        layout_settings = QHBoxLayout()
-        layout_settings.addWidget(label_inspector)
-        layout_settings.addWidget(self._button_live)
-        layout_settings.addWidget(self._button_hide)
-        layout_settings.addStretch(1)
-        layout_settings.addWidget(label_normalization)
-        layout_settings.addWidget(cbox_normalization)
-        layout_settings.addStretch(0)
-
-        layout_main = QVBoxLayout()
-        layout_main.addWidget(self._canvas)
-        layout_main.addWidget(self._toolbar)
-        layout_main.addLayout(layout_settings)
-        self.setLayout(layout_main)
+        # build interface
+        self._setup_interface()
 
         # define default plotting and layer properties
         self._properties = {
@@ -108,6 +73,44 @@ class InspectionWidget(QWidget):
         # set up callbacks and plot theme settings
         self._theme_changed()
         self.viewer.events.theme.connect(self._theme_changed)
+
+
+    def _setup_interface(self):
+        self._canvas = FigureCanvas(
+            Figure(figsize=(5, 3), facecolor='none', edgecolor='none')
+        )
+        self._axes = self._canvas.figure.subplots()
+        self._toolbar = NavigationToolbar(self._canvas, self)
+
+        # controls
+        self._button_live = QPushButton('live')
+        self._button_live.setCheckable(True)
+        self._button_live.setChecked(True)
+        self._button_live.clicked.connect(self._live_toggled)
+        self.viewer.bind_key('l', self._live_toggled)
+        self._button_hide = QPushButton('hide')
+        self._button_hide.setCheckable(True)
+        self._button_hide.clicked.connect(self._hide_toggled)
+        cbox_normalization = QComboBox()
+        cbox_normalization.addItems(['none', 'max', 'sum'])
+        cbox_normalization.activated.connect(self._normalization_changed)
+
+        # layout
+        layout_settings = QHBoxLayout()
+        layout_settings.addWidget(QLabel('inspector:'))
+        layout_settings.addWidget(self._button_live)
+        layout_settings.addWidget(self._button_hide)
+        layout_settings.addStretch(1)
+        layout_settings.addWidget(QLabel('normalization:'))
+        layout_settings.addWidget(cbox_normalization)
+        layout_settings.addStretch(0)
+
+        layout_main = QVBoxLayout()
+        layout_main.addWidget(self._canvas)
+        layout_main.addWidget(self._toolbar)
+        layout_main.addLayout(layout_settings)
+
+        self.setLayout(layout_main)
 
 
     def _set_mouse_move_callback(self):
