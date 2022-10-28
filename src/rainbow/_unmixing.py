@@ -1,5 +1,4 @@
-import _utils
-import spectrum
+import _spectrum
 import csv
 import numpy as np
 from scipy.optimize import nnls
@@ -95,7 +94,7 @@ class UnmixingWidget(QWidget):
             header = next(csv_reader)
             self._endmembers = []
             for name in header[1:]:
-                self._endmembers.append(spectrum.Spectrum(name, [], []))
+                self._endmembers.append(_spectrum.Spectrum(name, [], []))
 
             for row in csv_reader:
                 ncols = len(row)
@@ -156,10 +155,4 @@ class UnmixingWidget(QWidget):
 if __name__ == "__main__":
     import napari
     viewer = napari.Viewer()
-    im1 = napari.utils.io.magic_imread('/Users/brossetti/Desktop/Lepto_10fluors_s001.tif')
-    # im2 = im1.copy() - 1
-    # im1 = np.random.random((3, 256, 128)) # Z,Y,X order
-    # im2 = np.random.random((3, 256, 128))
-    viewer.add_image(im1)
-    # viewer.add_image(im2)
     napari.run()
