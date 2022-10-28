@@ -4,64 +4,45 @@
 [![PyPI](https://img.shields.io/pypi/v/rainbow.svg?color=green)](https://pypi.org/project/rainbow)
 [![Python Version](https://img.shields.io/pypi/pyversions/rainbow.svg?color=green)](https://python.org)
 [![tests](https://github.com/brossetti/rainbow/workflows/tests/badge.svg)](https://github.com/brossetti/rainbow/actions)
-[![codecov](https://codecov.io/gh/brossetti/rainbow/branch/main/graph/badge.svg)](https://codecov.io/gh/brossetti/rainbow)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/rainbow)](https://napari-hub.org/plugins/rainbow)
 
-A plugin for analyzing spectral microscopy images
-
-----------------------------------
-
-This [napari] plugin was generated with [Cookiecutter] using [@napari]'s [cookiecutter-napari-plugin] template.
-
-<!--
-Don't miss the full getting started guide to set up your new package:
-https://github.com/napari/cookiecutter-napari-plugin#getting-started
-
-and review the napari docs for plugin developers:
-https://napari.org/plugins/index.html
--->
+Welcome! You've found the repository for rainbow 🌈 -- a [napari] plugin for inspecting and unmixing spectral images. This project is in pre-alpha, so expect some glitches. Current functionality includes the ability to inspect pixel spectra and perform linear unmixing.
 
 ## Installation
 
 You can install `rainbow` via [pip]:
 
-    pip install rainbow
+    pip install napari-rainbow
 
+## Usage
 
+At the moment, rainbow contains an inspector widget for viewing pixel spectra and an unmixing widget for performing linear unmixing. Here's a quick introduction to each of these components.
 
-To install latest development version :
+### Inspector
 
-    pip install git+https://github.com/brossetti/rainbow.git
+![Inspector](./docs/inspector.gif)
 
+To view the spectra that make up your spectral image, select the `Inspect` widget from the `rainbow` dropdown menu. The widget will plot a live readout of the pixel spectra as you move your cursor over the image.
 
-## Contributing
+The `normalization` setting allows you to easily view and compare signals of different intensities.
 
-Contributions are very welcome. Tests can be run with [tox], please ensure
-the coverage at least stays the same before you submit a pull request.
+### Unmixing
+
+![Unmixing](./docs/unmixing.gif)
+
+To determine the amount of fluorescent label that exists within your spectral image, we can perform unmixing using the nonnegative least squares algorithm. This process requires that you have an endmember CSV file corresponding to the fluorophores used to label your sample. You can create this endmember file yourself or generate one from [FPbase](https://www.fpbase.org/). Note that the wavelength range of your endmembers must match that of your spectral image.
+
+To perform unmixing, first open your spectral image. Then open the `Metadata` widget to identify which dimension corresponds to your spectral information. Next, open the `Unmix` widget and click the `import` button. The importer only accepts CSV files representing your endmembers. If your CSV file is formatted properly, you will see the endmember spectra plotted for you to review. When you are ready, click `unmix` to start the nonnegative least squares algorithm. The spectral image will be replaced by the unmixed channel image.
 
 ## License
 
-Distributed under the terms of the [BSD-3] license,
-"rainbow" is free and open source software
+Distributed under the terms of the [BSD-3] license, "rainbow" is free and open source software
 
 ## Issues
 
 If you encounter any problems, please [file an issue] along with a detailed description.
 
 [napari]: https://github.com/napari/napari
-[Cookiecutter]: https://github.com/audreyr/cookiecutter
-[@napari]: https://github.com/napari
-[MIT]: http://opensource.org/licenses/MIT
-[BSD-3]: http://opensource.org/licenses/BSD-3-Clause
-[GNU GPL v3.0]: http://www.gnu.org/licenses/gpl-3.0.txt
-[GNU LGPL v3.0]: http://www.gnu.org/licenses/lgpl-3.0.txt
-[Apache Software License 2.0]: http://www.apache.org/licenses/LICENSE-2.0
-[Mozilla Public License 2.0]: https://www.mozilla.org/media/MPL/2.0/index.txt
-[cookiecutter-napari-plugin]: https://github.com/napari/cookiecutter-napari-plugin
-
-[file an issue]: https://github.com/brossetti/rainbow/issues
-
-[napari]: https://github.com/napari/napari
-[tox]: https://tox.readthedocs.io/en/latest/
 [pip]: https://pypi.org/project/pip/
-[PyPI]: https://pypi.org/
+[BSD-3]: http://opensource.org/licenses/BSD-3-Clause
+[file an issue]: https://github.com/brossetti/rainbow/issues
